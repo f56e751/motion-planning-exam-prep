@@ -1,0 +1,951 @@
+% !TEX program = xelatex
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{kotex}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black}
+
+\titleformat{\section}[block]{\Large\bfseries\color{blue!40!black}}{\thesection}{0.6em}{}
+\titleformat{\subsection}[block]{\large\bfseries\color{purple!60!black}}{\thesubsection}{0.5em}{}
+
+\setlist[itemize]{leftmargin=*,topsep=2pt,partopsep=0pt,itemsep=2pt}
+\setlist[enumerate]{leftmargin=*,topsep=2pt,partopsep=0pt,itemsep=2pt}
+
+\renewcommand{\arraystretch}{1.1}
+
+\newtcolorbox{prob}{
+  colback=blue!4,colframe=blue!50!black,
+  boxrule=0.4pt,arc=2pt,left=6pt,right=6pt,top=3pt,bottom=3pt,
+  breakable
+}
+
+\newtcolorbox{sol}{
+  colback=yellow!5,colframe=orange!60!black,
+  boxrule=0.4pt,arc=2pt,left=6pt,right=6pt,top=3pt,bottom=3pt,
+  breakable
+}
+
+\title{\textbf{\Huge Motion Planning --- 기말 예상 문제집}\\[0.3em]
+{\large 강의안 L00--L12 / cheat sheet 지참 가능 · 계산기 사용 불가}}
+\author{}
+\date{2026 Spring}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{center}
+\begin{tcolorbox}[colback=blue!5,colframe=blue!50!black,width=0.9\textwidth,boxrule=0.5pt]
+각 강의안(L00--L12)별 출제 가능성 높은 문제 \textbf{2개씩} (메인 + 보조), 총 \textbf{26문제}. 풀이는 문제 바로 아래.
+
+\smallskip\textbf{시험 조건}: cheat sheet 지참 가능 → 단순 암기 X, 이해/유도/작은 손계산 위주. 계산기 사용 불가 → 손계산 가능한 수치만.
+\end{tcolorbox}
+\end{center}
+
+\tableofcontents
+\newpage
+
+%=========================================================
+\section*{Part I --- Basic Planning (L00--L03)}
+\addcontentsline{toc}{section}{Part I --- Basic Planning (L00--L03)}
+
+%---------- L00 ----------
+\section{L00. Path Planning Basics}
+
+\subsection*{[메인] Visibility graph vs Voronoi diagram \hfill ★★★}
+\addcontentsline{toc}{subsection}{[메인] Visibility graph vs Voronoi diagram}
+
+\begin{prob}
+2D 다각형 환경에 5개의 직사각형 장애물이 있고 시작/목표 점이 주어졌다.
+
+\textbf{(a)} Visibility graph의 노드 수와 (최악의 경우) 엣지 수를 식으로 나타내라.
+
+\textbf{(b)} 같은 환경에서 Voronoi diagram이 visibility graph에 비해 어떤 경로 품질 측면에서 유리한가? 그리고 그 단점은?
+\end{prob}
+
+\begin{sol}
+\textbf{(a)} 직사각형 1개에 꼭짓점 4개 $\to$ 5개 장애물에 $5\times 4 = 20$개. 시작/목표 추가 $\to$ \textbf{노드 $n = 22$}. 모든 노드쌍 $\binom{n}{2}$ 중 일부만 연결 $\to$ 최악 \textbf{$O(n^2)$ 엣지} (대략 $\binom{22}{2} = 231$의 일부).
+
+\textbf{(b)} Voronoi diagram은 정의상 ``가장 가까운 두 장애물 경계로부터 등거리''인 점들 $\Rightarrow$ \textbf{clearance(장애물과의 여유)를 최대화}. 안전한 경로 생성에 유리. 단점: \textbf{최단 경로가 아님} (visibility graph는 obstacle vertex로 꺾이는 최단경로를 준다).
+\end{sol}
+
+\subsection*{[보조] Local minimum과 navigation function \hfill ★★}
+
+\begin{prob}
+\textbf{(a)} Attractive + repulsive potential 합으로 만든 potential field에서 robot이 local minimum에 갇히는 환경 예시를 하나 그림으로 설명하라.
+
+\textbf{(b)} Navigation function이 갖춰야 할 4가지 조건을 나열하라.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)} \textbf{U자형 (오목) 장애물 안쪽}에 robot이 들어가고, 그 정면에 goal이 있는 경우. 두 벽의 반발력이 좌우 대칭으로 robot을 안쪽으로 밀고, 정면 인력은 벽 너머 goal을 가리키지만, robot은 벽 사이의 점에서 합력 = 0이 되어 정지.
+
+\textbf{(b)} Navigation function:
+\begin{enumerate}
+  \item \textbf{Global minimum at goal}: $U(q_g) = \min_q U(q)$.
+  \item \textbf{No local minima}: 모든 critical point가 goal 또는 saddle.
+  \item \textbf{$U \to \infty$ near obstacles}: 충돌 방지.
+  \item \textbf{Smooth} ($C^2$ 이상): gradient descent 가능.
+\end{enumerate}
+\end{sol}
+
+%---------- L01 ----------
+\section{L01. A* / Dijkstra}
+
+\subsection*{[메인] 작은 그래프에서 A* trace \hfill ★★★}
+
+\begin{prob}
+5-노드 그래프: $S \to B$ cost 1, $S \to A$ cost 2, $B \to G$ cost 4, $A \to G$ cost 5, $B \to A$ cost 3. Heuristic: $h(S) = 4, h(A) = 3, h(B) = 2, h(G) = 0$.
+
+A*로 $S \to G$ 최적 경로를 찾고, 각 iteration의 expand 순서와 open list ($f = g + h$)를 표로 정리하라.
+\end{prob}
+
+\begin{sol}
+\begin{center}
+\small
+\begin{tabular}{cll}
+\toprule
+Iter & Expand & Open list 갱신 후 ($f = g + h$) \\
+\midrule
+1 & $S$ ($f = 0+4 = 4$) & $\{B(1+2 = 3),\ A(2+3 = 5)\}$ \\
+2 & $B$ ($f = 3$)       & $\{A(\min(5, 1+3+3 = 7) = 5),\ G(1+4+0 = 5)\}$ \\
+3 & $A$ ($f = 5$, tie)  & $G$: $g = 2+5 = 7 > 5$ → 변화 없음 \\
+4 & $G$ ($f = 5$)       & \textbf{goal 도달, 종료} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{최적 경로}: $S \to B \to G$, \textbf{cost 5}.
+\end{sol}
+
+\subsection*{[보조] Admissible but not consistent \hfill ★★}
+
+\begin{prob}
+3-노드 그래프 $A \to B \to G$, 비용 $c(A, B) = 1$, $c(B, G) = 10$. 다음 heuristic이 admissible이지만 consistent가 아님을 보여라.
+\[
+h(A) = 5,\ h(B) = 1,\ h(G) = 0.
+\]
+또한 Dijkstra가 A*의 특수 케이스인 이유를 한 줄로 설명하라.
+\end{prob}
+
+\begin{sol}
+\textbf{Admissible}: 실제 최단거리 $h^*(A) = 11$, $h^*(B) = 10$, $h^*(G) = 0$. $h \le h^*$ 모두 만족 \checkmark.
+
+\textbf{Consistent}: $h(A) \le c(A, B) + h(B)$ 검사 $\to$ $5 \le 1 + 1 = 2$? \textbf{거짓} $\to$ consistent 아님.
+
+\textbf{Dijkstra} = A* with $h(n) = 0$ for all $n$. $h = 0$은 항상 admissible+consistent이므로 Dijkstra는 A*의 자명한 특수 케이스.
+\end{sol}
+
+%---------- L02 ----------
+\section{L02. PRM, RRT, RRT*}
+
+\subsection*{[메인] RRT 의사코드 채우기 \hfill ★}
+
+\begin{prob}
+다음 RRT 의사코드의 빈칸 (1)--(3)을 채우고, goal bias의 역할을 설명하라.
+\begin{verbatim}
+T = {q_init}
+for i = 1..N:
+    q_rand = random_config()     # (with goal bias)
+    q_near = (1) ____________
+    q_new  = (2) ____________
+    if (3) ____________ :
+        T.add_vertex(q_new); T.add_edge(q_near, q_new)
+\end{verbatim}
+\end{prob}
+
+\begin{sol}
+\begin{itemize}
+  \item (1) \textbf{\texttt{nearest(T, q\_rand)}} --- 트리 안에서 $q_{\text{rand}}$에 가장 가까운 노드.
+  \item (2) \textbf{$q_{\text{near}} + \text{step} \cdot (q_{\text{rand}} - q_{\text{near}}) / \|q_{\text{rand}} - q_{\text{near}}\|$} --- $q_{\text{near}}$에서 $q_{\text{rand}}$ 방향으로 step만큼 전진.
+  \item (3) \textbf{\texttt{collision\_free(q\_near, q\_new)}} --- 두 점 사이 segment가 자유공간에 있는지.
+\end{itemize}
+
+\textbf{Goal bias}: 5--10\% 확률로 $q_{\text{rand}} = q_{\text{goal}}$로 두기. 순수 무작위 샘플은 균등하게 트리를 키우지만 목표 도달이 느림. Goal bias로 트리가 자연스럽게 목표 방향으로 편향 $\Rightarrow$ \textbf{수렴 가속}.
+\end{sol}
+
+\subsection*{[보조] RRT*의 rewire와 asymptotic optimality \hfill ★★★}
+
+\begin{prob}
+\textbf{(a)} RRT*에서 $X_{\text{near}}$ 안의 노드 $x_{\text{near}}$에 대해 어떤 조건이 성립할 때 부모를 $x_{\text{new}}$로 바꾸는지 식으로 쓰라.
+
+\textbf{(b)} RRT가 asymptotic optimal이 아닌 이유와 RRT*가 해결하는 방법.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)} Rewire 조건:
+\[
+\mathrm{cost}(x_{\text{new}}) + c(x_{\text{new}} \to x_{\text{near}}) < \mathrm{cost}(x_{\text{near}})
+\]
+이면 $x_{\text{near}}$의 부모를 $x_{\text{new}}$로 변경.
+
+\textbf{(b)} RRT는 첫 발견한 경로를 그대로 유지하며 부모가 바뀌지 않는다 $\Rightarrow$ \textbf{최적이 아닌 비용에 수렴}. RRT*는 (i) 새 노드에 대해 $X_{\text{near}}$ 내에서 \textbf{최소 비용 부모 선택}, (ii) 새 노드를 통해 더 싸지는 이웃의 \textbf{부모 재연결(rewire)} $\Rightarrow$ \textbf{almost-sure convergence to optimum}.
+\end{sol}
+
+%---------- L03 ----------
+\section{L03. LPA* / D* Lite}
+
+\subsection*{[메인] LPA*에서 차단 후 inconsistent 노드 \hfill ★}
+
+\begin{prob}
+3×3 grid, 4-connectivity, 모든 셀 비용 1, 처음 모두 free. 시작 $S = (1,1)$, 목표 $G = (3,3)$.
+
+LPA*가 처음 수렴해서 $g$ 값이 시작점부터의 Manhattan 거리와 같다:
+\[
+g = \begin{pmatrix}0 & 1 & 2\\ 1 & 2 & 3\\ 2 & 3 & 4\end{pmatrix}.
+\]
+
+이제 셀 $(1, 2)$가 차단된다.
+
+\textbf{(a)} 차단 후 inconsistent 해질 가능성이 있는 노드 ($(1,2)$의 4-이웃)를 나열하라.
+
+\textbf{(b)} 각 이웃의 새 $rhs$를 계산하고 inconsistent 여부를 판별하라.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)} $(1,2)$의 4-이웃: $\{(1,1),\ (1,3),\ (2,2)\}$.
+
+\textbf{(b)} 차단 후 $g(1,2) = \infty$. 각 이웃의 $rhs$를 다시 계산:
+
+\begin{itemize}
+\item $(1,1)$: 시작점, $rhs(s_{\text{start}}) = 0$ 고정. $g = 0 = rhs$ → \textbf{consistent (불변)}.
+
+\item $(1,3)$: 4-이웃 $(1,2), (2,3)$. $rhs = \min\{g(1,2)+1,\ g(2,3)+1\} = \min\{\infty, 4\} = 4$.\\
+$g(1,3) = 2 \ne 4$ → \textbf{inconsistent} ($g < rhs$, underconsistent).\\
+LPA*는 $g(1,3) \leftarrow \infty$로 설정 후 이웃들로 propagate.
+
+\item $(2,2)$: 4-이웃 $(1,2), (2,1), (2,3), (3,2)$. $rhs = \min\{\infty, 2, 4, 4\} = 2$.\\
+$g(2,2) = 2 = rhs$ → \textbf{consistent (불변)}. $(2,1)$을 통한 대체 경로가 동일 거리.
+\end{itemize}
+
+\textbf{결론}: $(1,3)$ 한 개만 underconsistent. $(2,1)$ 같은 대체 경로 덕분에 $(2,2)$는 영향 없음. LPA* ``변경 부분만 재계산''의 핵심 — 차단된 셀이 어떤 이웃의 \textbf{유일한} 최단경로에 있을 때만 inconsistent 발생.
+\end{sol}
+
+\subsection*{[보조] $k_m$이 없으면 \hfill ★}
+
+\begin{prob}
+D* Lite에서 key modifier $k_m$이 도입된 이유와, 만약 $k_m$이 없으면 어떤 비효율이 생기는지 설명하라.
+\end{prob}
+
+\begin{sol}
+D* Lite의 key는 $k_1(s) = \min(g, rhs) + h(s_{\text{start}}, s) + k_m$. 로봇이 매 step 움직이면 $s_{\text{start}}$가 바뀌므로 \textbf{모든 priority queue 노드의 $h$ 값이 바뀐다}. 이를 매번 반영하려면 queue 전체를 재정렬 ($O(N \log N)$) --- 비효율.
+
+\textbf{$k_m$ 트릭}: 누적 이동거리 $k_m \mathrel{+}= h(s_{\text{last}}, s_{\text{curr}})$를 유지하고, \textbf{새로 삽입되는 노드에만 $k_m$을 더한 key}를 부여. 기존 노드는 그대로 두어도 상대적 순서가 보존 $\Rightarrow$ $O(\log N)$ 삽입만 발생, 전체 재정렬 불필요.
+\end{sol}
+
+%=========================================================
+\section*{Part II --- Constraints \& Controllability (L04--L05)}
+\addcontentsline{toc}{section}{Part II --- Constraints \& Controllability (L04--L05)}
+
+%---------- L04 ----------
+\section{L04. Nonholonomic Constraints}
+
+\subsection*{[메인] Simple car의 Pfaffian과 Lie bracket \hfill ★★★★★}
+
+\begin{prob}
+Simple car 운동학: $\dot x = v\cos\theta$, $\dot y = v\sin\theta$, $\dot\theta = \omega$.
+
+\textbf{(a)} 후륜 미끄럼 없음 조건에서 Pfaffian 제약 $A(q)\dot q = 0$을 유도하라.
+
+\textbf{(b)} Control-affine $\dot q = g_1 v + g_2 \omega$의 $g_1, g_2$를 쓰고 $[g_1, g_2]$를 계산하라.
+
+\textbf{(c)} $\det[g_1\ g_2\ [g_1, g_2]]$를 계산해 nonholonomic임을 보여라.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)} 후륜은 heading $\theta$ 방향으로만 움직임 $\Rightarrow$ 속도 벡터가 $\theta$에 수직 성분 0:
+\[
+(\dot x, \dot y) \cdot (-\sin\theta, \cos\theta) = -\dot x\sin\theta + \dot y\cos\theta = 0
+\]
+\[
+\boxed{A(q) = [\sin\theta\ -\cos\theta\ 0],\quad \dot x\sin\theta - \dot y\cos\theta = 0.}
+\]
+
+\textbf{(b)}
+\[
+g_1 = \begin{bmatrix}\cos\theta\\\sin\theta\\0\end{bmatrix},\quad g_2 = \begin{bmatrix}0\\0\\1\end{bmatrix}.
+\]
+$g_2$ 상수 $\Rightarrow$ $\partial g_2/\partial q = 0$.
+\[
+\frac{\partial g_1}{\partial q} = \begin{bmatrix}0 & 0 & -\sin\theta\\0 & 0 & \cos\theta\\0 & 0 & 0\end{bmatrix},\quad \frac{\partial g_1}{\partial q}g_2 = \begin{bmatrix}-\sin\theta\\\cos\theta\\0\end{bmatrix}.
+\]
+\[
+\boxed{[g_1, g_2] = 0 - \begin{bmatrix}-\sin\theta\\\cos\theta\\0\end{bmatrix} = \begin{bmatrix}\sin\theta\\-\cos\theta\\0\end{bmatrix}.}
+\]
+
+\textbf{(c)} 3행 2열 cofactor 전개 ($a_{32} = 1$, 나머지 0):
+\[
+\det\begin{bmatrix}\cos\theta & 0 & \sin\theta\\\sin\theta & 0 & -\cos\theta\\0 & 1 & 0\end{bmatrix} = -1 \cdot \det\begin{bmatrix}\cos\theta & \sin\theta\\\sin\theta & -\cos\theta\end{bmatrix} = -(-\cos^2\theta - \sin^2\theta) = 1 \neq 0.
+\]
+$\dim \mathcal{L}(\Delta) = 3 = n$, $\Delta$는 \textbf{non-involutive} $\Rightarrow$ \textbf{nonholonomic}. \hfill$\square$
+\end{sol}
+
+\subsection*{[보조] 자동차 변종 비교 \hfill ★}
+
+\begin{prob}
+Tricycle, Simple car, Reeds-Shepp, Dubins의 입력 집합을 적고, 네 변종 중 \textbf{최소 회전반경 $\rho_{\min}$ 개념이 의미 있는} 것을 모두 골라라 (이유 설명).
+\end{prob}
+
+\begin{sol}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+변종 & $U_v$ & $U_\phi$ \\
+\midrule
+Tricycle    & $[-1, 1]$ & $[-\pi/2, \pi/2]$ \\
+Simple car  & $[-1, 1]$ & $(-\phi_{\max}, \phi_{\max})$, $\phi_{\max} < \pi/2$ \\
+Reeds-Shepp & $\{-1, 0, 1\}$ & $(-\phi_{\max}, \phi_{\max})$ \\
+Dubins      & $\{0, 1\}$ & $(-\phi_{\max}, \phi_{\max})$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+$\rho_{\min} = L/\tan\phi_{\max}$. Tricycle은 $u_\phi = \pm\pi/2$로 제자리 회전 가능 $\Rightarrow$ $\tan(\pi/2) = \infty$ $\Rightarrow$ $\rho_{\min} = 0$, \textbf{무의미}.
+
+\textbf{의미 있는 것}: \textbf{Simple car, Reeds-Shepp, Dubins} (모두 $\phi_{\max} < \pi/2$로 유한 양의 $\rho_{\min}$).
+\end{sol}
+
+%---------- L05 ----------
+\section{L05. Controllability \& Chained Form}
+
+\subsection*{[메인] Unicycle chained form 검증 \hfill ★★★★}
+
+\begin{prob}
+Unicycle $\dot x = v\cos\theta$, $\dot y = v\sin\theta$, $\dot\theta = \omega$. 좌표/입력 변환
+\[
+z_1 = \theta,\quad z_2 = x\cos\theta + y\sin\theta,\quad z_3 = x\sin\theta - y\cos\theta,
+\]
+\[
+u_1 = \omega,\quad u_2 = v - z_3 u_1
+\]
+가 chained form $\dot z_1 = u_1$, $\dot z_2 = u_2$, $\dot z_3 = z_2 u_1$을 만족함을 보여라.
+\end{prob}
+
+\begin{sol}
+\textbf{$\dot z_1$}: $\dot z_1 = \dot\theta = \omega = u_1$ \checkmark.
+
+\textbf{$\dot z_2$}:
+\[
+\dot z_2 = \dot x\cos\theta - x\sin\theta\,\dot\theta + \dot y\sin\theta + y\cos\theta\,\dot\theta
+\]
+$\dot x = v\cos\theta$, $\dot y = v\sin\theta$ 대입:
+\[
+= v\cos^2\theta + v\sin^2\theta + \omega(y\cos\theta - x\sin\theta) = v - z_3\omega = v - z_3 u_1.
+\]
+$u_2 = v - z_3 u_1$로 정의했으므로 $\dot z_2 = u_2$ \checkmark.
+
+\textbf{$\dot z_3$}:
+\[
+\dot z_3 = \dot x\sin\theta + x\cos\theta\,\dot\theta - \dot y\cos\theta + y\sin\theta\,\dot\theta = v\cos\theta\sin\theta - v\sin\theta\cos\theta + \omega(x\cos\theta + y\sin\theta) = z_2 u_1.
+\]
+\checkmark. 따라서 $(z_1, z_2, z_3, u_1, u_2)$가 3-state 2-input chained form. \hfill$\square$
+\end{sol}
+
+\subsection*{[보조] Chow--Rashevskii로 Unicycle controllability \hfill ★★}
+
+\begin{prob}
+Unicycle $(n = 3, m = 2)$가 small-time locally controllable임을 Chow--Rashevskii 정리로 보여라.
+\end{prob}
+
+\begin{sol}
+Driftless $\dot q = g_1 v + g_2 \omega$. L04 메인에서 계산:
+\[
+g_1 = [\cos\theta, \sin\theta, 0]^T,\quad g_2 = [0, 0, 1]^T,\quad [g_1, g_2] = [\sin\theta, -\cos\theta, 0]^T.
+\]
+$\det[g_1\ g_2\ [g_1, g_2]] = 1 \neq 0$이므로 $\dim \mathcal{L}(\Delta) = 3 = n$.
+
+\textbf{Chow--Rashevskii}에 의해 small-time locally controllable. \hfill$\square$
+
+\textbf{해석}: 입력 $(v, \omega)$만으로는 순간 sideways 운동 불가. 하지만 Lie bracket $[g_1, g_2]$가 sideways 방향을 생성 $\Rightarrow$ 4-단계 motion primitive (translate-rotate-untranslate-unrotate)로 임의 위치 도달 가능. 평행주차의 원리.
+\end{sol}
+
+\subsection*{[보조2] Bicycle-like (자동차) chained form 검증 \hfill ★★★★}
+
+\begin{prob}
+Rear-wheel drive 자동차, wheelbase $L$:
+\[\dot x = v\cos\theta,\ \dot y = v\sin\theta,\ \dot\theta = (v/L)\tan\phi,\ \dot\phi = \omega.\]
+$q = (x, y, \theta, \phi)$.
+
+\textbf{(a)} $g_1, g_2$를 쓰고 $g_3 = [g_1, g_2]$, $g_4 = [g_1, g_3]$를 계산하라.
+
+\textbf{(b)} $\det[g_1\ g_2\ g_3\ g_4]$를 구하고 nonholonomic임을 보여라.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)}
+\[
+g_1 = \begin{bmatrix}\cos\theta\\\sin\theta\\\tan\phi/L\\0\end{bmatrix},\quad g_2 = \begin{bmatrix}0\\0\\0\\1\end{bmatrix}.
+\]
+
+$g_2$ 상수 $\Rightarrow$ $\partial g_2/\partial q = 0$. $g_1$의 Jacobian에서 $\phi$ 미분만 nonzero ($q$의 4번째 변수):
+\[
+\frac{\partial g_1}{\partial\phi} = \begin{bmatrix}0\\0\\\sec^2\phi/L\\0\end{bmatrix},\quad \frac{\partial g_1}{\partial q}g_2 = \frac{\partial g_1}{\partial\phi}.
+\]
+
+\[
+\boxed{g_3 = [g_1, g_2] = -\frac{\partial g_1}{\partial q}g_2 = \begin{bmatrix}0\\0\\-1/(L\cos^2\phi)\\0\end{bmatrix}.}
+\]
+
+$g_3$는 $\phi$만 의존, $g_1$의 4번째 성분이 0이므로 $\partial g_3/\partial q \cdot g_1 = 0$. $\partial g_1/\partial q \cdot g_3$는 $g_3^{(3)} = -1/(L\cos^2\phi)$ 효과:
+\[
+\frac{\partial g_1}{\partial q}g_3 = g_3^{(3)} \cdot \frac{\partial g_1}{\partial\theta} = -\frac{1}{L\cos^2\phi}\begin{bmatrix}-\sin\theta\\\cos\theta\\0\\0\end{bmatrix}.
+\]
+
+\[
+\boxed{g_4 = [g_1, g_3] = -\frac{\partial g_1}{\partial q}g_3 = \begin{bmatrix}-\sin\theta/(L\cos^2\phi)\\\cos\theta/(L\cos^2\phi)\\0\\0\end{bmatrix}.}
+\]
+
+\textbf{(b)} 4번째 행 cofactor 전개 ($a_{42} = 1$, 나머지 0). Cofactor 부호 $(-1)^{4+2} = +1$:
+\[
+\det[g_1\ g_2\ g_3\ g_4] = +\det\begin{bmatrix}\cos\theta & 0 & -\sin\theta/(L\cos^2\phi)\\\sin\theta & 0 & \cos\theta/(L\cos^2\phi)\\\tan\phi/L & -1/(L\cos^2\phi) & 0\end{bmatrix}.
+\]
+
+3×3에서 2번째 열 cofactor ($a_{32} = -1/(L\cos^2\phi)$, 부호 $(-1)^{3+2}=-1$):
+\[
+= (-1)\cdot\bigl(-\tfrac{1}{L\cos^2\phi}\bigr)\det\begin{bmatrix}\cos\theta & -\sin\theta/(L\cos^2\phi)\\\sin\theta & \cos\theta/(L\cos^2\phi)\end{bmatrix} = \frac{1}{L\cos^2\phi}\cdot\frac{\cos^2\theta + \sin^2\theta}{L\cos^2\phi}.
+\]
+
+\[
+\boxed{\det[g_1\ g_2\ g_3\ g_4] = +\frac{1}{L^2\cos^4\phi} \neq 0\quad (\cos\phi \neq 0).}
+\]
+
+따라서 $\dim\mathcal{L}(\Delta) = 4 = n$ $\Rightarrow$ \textbf{nonholonomic, controllable} (Chow--Rashevskii). 이 결과가 chained form 변환 $z_1 = x, z_2 = \sec^3\theta\tan\phi/L, z_3 = \tan\theta, z_4 = y$의 정당성을 뒷받침. (HW2 1(a)--(c)와 직결.)
+\end{sol}
+
+%=========================================================
+\section*{Part III --- Trajectory \& Collision (L06--L09)}
+\addcontentsline{toc}{section}{Part III --- Trajectory \& Collision (L06--L09)}
+
+%---------- L06 ----------
+\section{L06. Polynomial Trajectory \& Bézier}
+
+\subsection*{[메인] $J = \int (P^{(3)})^2 dt$ 최소화 \hfill ★★★★}
+
+\begin{prob}
+비용 $J = \int_0^T (P^{(3)}(t))^2 dt$를 최소화하는 다항식 $P(t)$의 차수와 필요한 BC 개수를 Euler--Lagrange equation으로 유도하라.
+\end{prob}
+
+\begin{sol}
+$\mathcal{L} = (P^{(3)})^2$. 일반 Euler--Lagrange:
+\[
+\sum_{k=0}^r (-1)^k \frac{d^k}{dt^k}\frac{\partial \mathcal{L}}{\partial x^{(k)}} = 0.
+\]
+
+$\partial\mathcal{L}/\partial P^{(3)} = 2 P^{(3)}$, 나머지 0. 따라서:
+\[
+(-1)^3 \frac{d^3}{dt^3}\bigl(2 P^{(3)}\bigr) = 0 \quad\Rightarrow\quad \frac{d^6}{dt^6} P(t) = 0.
+\]
+
+$\Rightarrow$ $P$는 \textbf{5차 다항식}. 계수 6개 $\Rightarrow$ \textbf{BC 6개} 필요 (양 끝에서 위치, 속도, 가속도 각각).
+
+이것이 \textbf{minimum-jerk trajectory} (quintic Hermite).
+\end{sol}
+
+\subsection*{[보조2] Minimum-snap trajectory 차수 \hfill ★★★}
+
+\begin{prob}
+비용 $J = \int_0^T (P^{(4)}(t))^2 dt$ (snap의 제곱) 최소화에서 최적 $P(t)$의 차수와 BC 개수를 Euler--Lagrange로 유도하고, minimum-jerk와 비교하라.
+\end{prob}
+
+\begin{sol}
+$\mathcal{L} = (P^{(4)})^2$. Higher-order Euler--Lagrange:
+\[
+\sum_{k=0}^4 (-1)^k\frac{d^k}{dt^k}\frac{\partial\mathcal{L}}{\partial P^{(k)}} = 0.
+\]
+
+$\partial\mathcal{L}/\partial P^{(4)} = 2 P^{(4)}$만 nonzero:
+\[
+(-1)^4 \frac{d^4}{dt^4}(2P^{(4)}) = 0 \quad\Rightarrow\quad \frac{d^8}{dt^8}P(t) = 0.
+\]
+
+$\Rightarrow$ $P$는 \textbf{7차 다항식}. 계수 8개 $\Rightarrow$ \textbf{BC 8개}. 양 끝에서 \textbf{위치, 속도, 가속도, jerk} 각각 ($4 \times 2 = 8$).
+
+\textbf{Minimum-jerk vs minimum-snap 비교}:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+비용 & 차수 & BC 개수 & 양 끝 BC \\
+\midrule
+$\int(P^{(3)})^2 dt$ (min-jerk) & 5 (quintic) & 6 & 위치, 속도, 가속도 \\
+$\int(P^{(4)})^2 dt$ (min-snap) & 7 (septic)  & 8 & + jerk \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Quadrotor flatness 연계}: $\ddddot{\mathbf p}$가 모멘트 $M$을 결정 $\Rightarrow$ snap 최소화 = 입력 노력 최소화의 자연스러운 척도 (Mellinger \& Kumar 2011).
+\end{sol}
+
+\subsection*{[보조] Bézier $C^2$ 연속 \hfill ★★★}
+
+\begin{prob}
+두 큐빅 Bézier ($N = 3$) segment의 control points가 $P_0, P_1, P_2, P_3$과 $Q_0, Q_1, Q_2, Q_3$. 접합점에서 $C^0, C^1, C^2$ 연속을 만족하려면 $Q_0, Q_1, Q_2$를 $P_1, P_2, P_3$로 표현하라.
+\end{prob}
+
+\begin{sol}
+Bézier hodograph: $r'$의 control point는 $N(b_{k+1} - b_k)$.
+
+\begin{itemize}
+  \item $C^0$: $r_1(1) = r_2(0)$ $\Rightarrow$ $\boxed{Q_0 = P_3}$.
+  \item $C^1$: $r_1'(1) = r_2'(0)$. $3(P_3 - P_2) = 3(Q_1 - Q_0)$ $\Rightarrow$ $\boxed{Q_1 = 2P_3 - P_2}$.
+  \item $C^2$: $r_1''(1) = r_2''(0)$. $6(P_3 - 2P_2 + P_1) = 6(Q_2 - 2Q_1 + Q_0)$.\\
+  $Q_0 = P_3$, $Q_1 = 2P_3 - P_2$ 대입:
+  \[
+  Q_2 = (P_3 - 2P_2 + P_1) + 2(2P_3 - P_2) - P_3 = \boxed{4P_3 - 4P_2 + P_1}.
+  \]
+\end{itemize}
+\end{sol}
+
+%---------- L07 ----------
+\section{L07. Collision Checking}
+
+\subsection*{[메인] SAT으로 두 사각형 충돌 판정 \hfill ★★}
+
+\begin{prob}
+축 정렬 사각형 $A = [0, 2] \times [0, 2]$와 $B = [1, 3] \times [2, 4]$의 충돌 여부를 SAT으로 판정하라.
+\end{prob}
+
+\begin{sol}
+두 사각형 모두 축 정렬이므로 분리축 후보는 $x$축 $u_x = (1, 0)$과 $y$축 $u_y = (0, 1)$만.
+
+\begin{itemize}
+  \item $u_x$ 사영: $A \to [0, 2]$, $B \to [1, 3]$. 교집합 $[1, 2]$, 겹침.
+  \item $u_y$ 사영: $A \to [0, 2]$, $B \to [2, 4]$. 교집합 $\{2\}$, 한 점.
+\end{itemize}
+
+두 축 모두 disjoint 아님 $\Rightarrow$ \textbf{충돌 (정확히 경계 접촉)}. 분리축이 없으므로 SAT은 collision으로 판정.
+
+(만약 $B = [3, 5] \times [2, 4]$였다면 $u_x$ 사영 $[3, 5]$가 $A = [0, 2]$와 disjoint $\Rightarrow$ no collision.)
+\end{sol}
+
+\subsection*{[보조] GJK 알고리즘 단계 \hfill ★}
+
+\begin{prob}
+GJK가 $A \cap B$ 판정에서 사용하는 핵심 아이디어 (Minkowski 차)와 support function을 설명하고, 다음 순서로 시뮬레이션:
+
+초기 방향 $d_0 = (1, 0)$. Support point 차례로 $a_1 = (4, -2)$, 새 방향 $d_1$ 결정 후 $a_2 = (-7, 2)$, 다시 $a_3 = (0, 4)$. 이때 simplex가 원점을 포함하는지 어떻게 판단하는가?
+\end{prob}
+
+\begin{sol}
+\textbf{핵심}: $A \cap B \neq \emptyset \iff 0 \in A - B$ (Minkowski 차).
+\[
+\mathrm{support}_{A - B}(d) = \mathrm{support}_A(d) - \mathrm{support}_B(-d) = \arg\max_{x \in A - B} d^T x.
+\]
+
+\textbf{Simulation}:
+\begin{enumerate}
+  \item $a_1 = (4, -2)$. Simplex $\{a_1\}$. 원점은 simplex 외부 $\Rightarrow$ 다음 방향 $d_1 = -a_1 = (-4, 2)$.
+  \item $a_2 = (-7, 2)$. Simplex $\{a_1, a_2\}$. 원점이 segment 외부 $\Rightarrow$ 원점 방향의 수직 분할로 새 방향 $d_2 \propto (24, 66)$.
+  \item $a_3 = (0, 4)$. Simplex $\{a_1, a_2, a_3\}$ = 삼각형.
+\end{enumerate}
+
+\textbf{원점 포함 판정}: 삼각형 $\{(4, -2), (-7, 2), (0, 4)\}$의 \textbf{barycentric 좌표}로 $0 = \lambda_1 a_1 + \lambda_2 a_2 + \lambda_3 a_3$, $\sum\lambda_i = 1$ 풀이.
+$\lambda_1 \approx 0.56,\ \lambda_2 \approx 0.32,\ \lambda_3 \approx 0.12$ --- \textbf{모두 $\ge 0$, 합 1}이므로 $0$이 삼각형 내부 $\Rightarrow$ \textbf{collision}.
+
+(만약 어떤 $\lambda_i < 0$이면 원점은 그 vertex 반대편이므로 그쪽 edge로 simplex를 축소하고 새 support point 계산.)
+\end{sol}
+
+%---------- L08 ----------
+\section{L08. CHOMP}
+
+\subsection*{[메인] Projection $(I - \hat x'\hat x'^T)$의 의미 \hfill ★★}
+
+\begin{prob}
+CHOMP obstacle gradient:
+\[
+\frac{\delta J}{\delta x} = \|x'\|\left[(I - \hat x'\hat x'^T)\nabla c - c(x)\kappa\right].
+\]
+
+\textbf{(a)} 행렬 $(I - \hat x'\hat x'^T)$가 임의의 벡터에 작용할 때 기하학적으로 무엇을 하는가?
+
+\textbf{(b)} 왜 이 projection이 obstacle gradient에 등장하는가? Arc-length parameterization과 연관지어 설명하라.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)} $\hat x' = x'/\|x'\|$는 trajectory의 단위 접선벡터. $(I - \hat x'\hat x'^T)v$는 $v$를 \textbf{접선에 수직인 평면으로 정사영}한 벡터:
+\[
+v = \underbrace{(\hat x'^T v)\hat x'}_{\text{tangential}} + \underbrace{(I - \hat x'\hat x'^T)v}_{\text{normal}}.
+\]
+
+\textbf{(b)} Obstacle cost를 \textbf{arc-length로 적분} (시간 무관)하기 위해 $\int c(x)\|x'\|\,dt$ 형태. 이때 trajectory를 \textbf{접선 방향으로 reparameterize} (속도 조정)해도 cost 불변이어야 한다.
+
+기존 $\nabla c$를 그대로 쓰면 접선 방향 변형도 cost를 바꿀 수 있음. Projection을 취하면 \textbf{접선 성분이 제거} $\Rightarrow$ 오직 \textbf{trajectory를 옆으로 밀어내는 변형(normal)}만 남는다. 이는 reparameterization invariance를 보장하고 더 부드러운 obstacle avoidance를 유도.
+
+추가 항 $-c(x)\kappa$는 curvature가 큰 곳에서 trajectory를 곧게 펴는 역할 (path length 단축).
+\end{sol}
+
+\subsection*{[보조] $K_2$ Finite difference matrix \hfill ★}
+
+\begin{prob}
+$\xi = (q_1, q_2, q_3, q_4)^T$ (1차원 4 waypoint). $K_2$ finite difference operator를 명시적으로 행렬로 쓰고 $K_2\xi$의 의미를 설명하라.
+\end{prob}
+
+\begin{sol}
+$K_2$의 $i$-th 행은 가속도 ($q_{i+1} - 2q_i + q_{i-1}$). 강의안 정의에 따라:
+\[
+K_2 = \begin{bmatrix}1 & 0 & 0 & 0\\-2 & 1 & 0 & 0\\1 & -2 & 1 & 0\\0 & 1 & -2 & 1\end{bmatrix},\quad K_2\xi = \begin{bmatrix}q_1\\-2q_1 + q_2\\q_1 - 2q_2 + q_3\\q_2 - 2q_3 + q_4\end{bmatrix}.
+\]
+
+$\|K_2\xi\|^2$는 trajectory의 \textbf{discrete acceleration 제곱합} $\Rightarrow$ minimum-acceleration smoothness penalty. $A = K_2^T K_2 \succ 0$ --- CHOMP의 metric matrix. 이 $A^{-1}$로 gradient를 ``smoothing''하여 covariant update를 만든다.
+\end{sol}
+
+%---------- L09 ----------
+\section{L09. Quadrotor Flatness \& SFC}
+
+\subsection*{[메인] Quadrotor thrust와 body z-axis \hfill ★★★}
+
+\begin{prob}
+질량 $m = 1$, 중력 $g = 10$. $\mathbf{e}_3 = [0, 0, 1]^T$.
+
+\textbf{(a)} 호버 $\ddot{\mathbf{p}} = [0, 0, 0]^T$ --- thrust $f$와 body z-축 $\mathbf{b}_3$를 구하라.
+
+\textbf{(b)} $\ddot{\mathbf{p}} = [3, 0, 6]^T$ (위 + 앞 방향 가속) --- $f, \mathbf{b}_3$를 구하라.
+\end{prob}
+
+\begin{sol}
+공식: $\mathbf{a} = g\mathbf{e}_3 - \ddot{\mathbf{p}}$, $f = m\|\mathbf{a}\|$, $\mathbf{b}_3 = \mathbf{a}/\|\mathbf{a}\|$.
+
+\textbf{(a)} $\mathbf{a} = [0, 0, 10] - [0, 0, 0] = [0, 0, 10]$. $\|\mathbf{a}\| = 10$.
+\[\boxed{f = 10,\quad \mathbf{b}_3 = [0, 0, 1]^T}\]
+수직 상방, 중력과 평형.
+
+\textbf{(b)} $\mathbf{a} = [0, 0, 10] - [3, 0, 6] = [-3, 0, 4]$. $\|\mathbf{a}\| = \sqrt{9 + 16} = 5$.
+\[\boxed{f = 5,\quad \mathbf{b}_3 = [-3, 0, 4]^T / 5}\]
+
+\textbf{의미}: thrust 방향 $\mathbf{b}_3$는 가속 요구와 중력 보상의 합력 방향. 평탄출력 $(x, y, z, \psi)$의 2차 미분만으로 $\mathbf{b}_3$ (attitude 2자유도)와 $f$가 결정됨 $\Rightarrow$ flatness.
+\end{sol}
+
+\subsection*{[보조] SFC ellipsoid tangent plane \hfill ★}
+
+\begin{prob}
+Ellipsoid $\xi(E, d) = \{p : (p - d)^T E (p - d) \le 1\}$ ($E \succ 0$)의 경계점 $p^c$에서 접평면이 $a^T p \le b$ 꼴, $a = 2E(p^c - d)$, $b = a^T p^c$임을 보여라.
+\end{prob}
+
+\begin{sol}
+Ellipsoid 경계: $g(p) = (p - d)^T E(p - d) - 1 = 0$. 접평면의 법선 = $\nabla g(p^c) = 2 E(p^c - d) =: a$.
+
+접평면 방정식: $a^T(p - p^c) = 0 \iff a^T p = a^T p^c =: b$.
+
+내부 결정: 중심 $p = d$ 대입. $a^T d = 2(p^c - d)^T E d$.
+\[
+b - a^T d = a^T p^c - a^T d = 2(p^c - d)^T E(p^c - d) = 2 \cdot 1 = 2 > 0
+\]
+$\Rightarrow$ 중심 $d$는 $a^T p < b$ 쪽. Ellipsoid 전체가 \textbf{halfspace $\{p : a^T p \le b\}$에 포함}되고, hyperplane은 ellipsoid의 \textbf{지지 hyperplane}.
+
+(강의안의 $E^{-1}E^{-T}$ 표기는 affine map $E$로 unit ball을 변환한 ellipsoid 정의를 사용한 경우. 본 문제의 표기와 동치.)
+\end{sol}
+
+%=========================================================
+\section*{Part IV --- Optimal Control \& MPC (L10--L12)}
+\addcontentsline{toc}{section}{Part IV --- Optimal Control \& MPC (L10--L12)}
+
+%---------- L10 ----------
+\section{L10. LQR / iLQR}
+
+\subsection*{[메인] Riccati 한 step 손계산 \hfill ★★★★}
+
+\begin{prob}
+2D 시스템 $A = \begin{pmatrix}1 & 1\\0 & 1\end{pmatrix}$, $B = \begin{pmatrix}0\\1\end{pmatrix}$ (double integrator, $\Delta t = 1$). $Q = I_2$, $R = 1$, $P_2 = Q = I_2$ ($N = 2$).
+
+$K_1, P_1$을 한 단계 Riccati로 손계산하라.
+\end{prob}
+
+\begin{sol}
+\[
+K_k = (R + B^T P_{k+1} B)^{-1} B^T P_{k+1} A,
+\]
+\[
+P_k = Q + A^T P_{k+1} A - A^T P_{k+1} B (R + B^T P_{k+1} B)^{-1} B^T P_{k+1} A.
+\]
+
+$P_2 = I$.
+
+\textbf{1.} $B^T P_2 B = B^T B = 1$. $R + B^T P_2 B = 2$.
+
+\textbf{2.} $B^T P_2 A = (0, 1)\begin{pmatrix}1 & 1\\0 & 1\end{pmatrix} = (0, 1)$.
+
+\textbf{3.} $K_1 = (1/2)(0, 1) = (0, 1/2)$.
+
+\textbf{4.} $A^T P_2 A = A^T A = \begin{pmatrix}1 & 0\\1 & 1\end{pmatrix}\begin{pmatrix}1 & 1\\0 & 1\end{pmatrix} = \begin{pmatrix}1 & 1\\1 & 2\end{pmatrix}$.
+
+\textbf{5.} $A^T P_2 B = \begin{pmatrix}1 & 0\\1 & 1\end{pmatrix}\begin{pmatrix}0\\1\end{pmatrix} = \begin{pmatrix}0\\1\end{pmatrix}$.
+$A^T P_2 B \cdot (B^T P_2 A)/2 = \frac{1}{2}\begin{pmatrix}0\\1\end{pmatrix}(0, 1) = \frac{1}{2}\begin{pmatrix}0 & 0\\0 & 1\end{pmatrix}$.
+
+\textbf{6.} $P_1 = I + \begin{pmatrix}1 & 1\\1 & 2\end{pmatrix} - \frac{1}{2}\begin{pmatrix}0 & 0\\0 & 1\end{pmatrix} = \begin{pmatrix}2 & 1\\1 & 5/2\end{pmatrix}$.
+
+\[
+\boxed{K_1 = (0,\ 1/2),\quad P_1 = \begin{pmatrix}2 & 1\\1 & 5/2\end{pmatrix}.}
+\]
+
+해석: 최적 제어 $u^* = -K_1 x = -(1/2)v$. 속도에 비례한 감속 ($B = e_2$ 구조이므로 위치는 직접 제어되지 않음).
+\end{sol}
+
+\subsection*{[보조] iLQR의 $k, K$ 역할과 line search \hfill ★★}
+
+\begin{prob}
+iLQR backward pass에서 $\delta u^* = k + K\delta x$, $k = -Q_{uu}^{-1}Q_u$, $K = -Q_{uu}^{-1}Q_{ux}$.
+
+\textbf{(a)} $k$와 $K$ 각각이 forward rollout $u^{\text{new}} = \bar u + \alpha k + K(x^{\text{new}} - \bar x)$에서 어떤 역할을 하는가?
+
+\textbf{(b)} $\alpha \in (0, 1]$ line search가 왜 필요한가?
+\end{prob}
+
+\begin{sol}
+\textbf{(a)}
+\begin{itemize}
+  \item \textbf{$k$ (feedforward)}: 명목 trajectory에서 \textbf{open-loop 개선 방향}. $\bar u$에 더해져 더 낮은 cost로 이동. $\bar u$가 이미 최적이면 $Q_u = 0$ $\Rightarrow$ $k = 0$.
+  \item \textbf{$K$ (feedback)}: state 편차 $x^{\text{new}} - \bar x$를 보정하는 \textbf{closed-loop gain}. forward rollout 중 비선형성으로 nominal에서 벗어나도 안정화. LQR의 시간가변 feedback gain과 동일한 구조.
+\end{itemize}
+
+\textbf{(b)} Backward pass는 nominal 주위의 \textbf{2차 근사}. Full step $\alpha = 1$은 근사가 정확할 때만 보장. 비선형성이 크거나 nominal에서 멀어지면 cost가 오히려 증가할 수 있다.
+
+$\to$ $\alpha$를 1부터 줄여가며 (0.5, 0.25, ...) \textbf{실제 cost가 감소하는 첫 $\alpha$} 채택. 또한 backward pass에 LM regularization $Q_{uu} + \lambda I$를 추가해 안정화.
+\end{sol}
+
+%---------- L11 ----------
+\section{L11. Linear MPC Stability}
+
+\subsection*{[메인] Recursive feasibility 핵심 증명 \hfill ★★★★★}
+
+\begin{prob}
+Linear MPC의 recursive feasibility를 다음 단계로 증명하라:
+
+(i) 시각 $t$에서 optimal control sequence $\mathbf{u}_t^* = (u_0^*, \ldots, u_{N-1}^*)$, predicted states $(x_0^*, \ldots, x_N^*)$, $x_N^* \in \mathcal{X}_f$.
+
+(ii) $u_0^*$ 적용 후 $x_{t+1} = x_1^*$. 시각 $t+1$에서 후보 sequence $\tilde{\mathbf{u}} = (u_1^*, \ldots, u_{N-1}^*, K x_N^*)$가 feasible함을 보여라.
+\end{prob}
+
+\begin{sol}
+$\tilde{\mathbf{u}}$ 적용 시 predicted states:
+\[
+\tilde x_i = x_{i+1}^*,\quad i = 0, \ldots, N - 1,\quad \tilde x_N = A_K x_N^*\quad (A_K = A + BK).
+\]
+
+\textbf{Feasibility 점검}:
+\begin{enumerate}
+  \item \textbf{입력 제약 $\tilde u_i \in \mathcal{U}$}:
+    \begin{itemize}
+      \item $i = 0, \ldots, N - 2$: $\tilde u_i = u_{i+1}^* \in \mathcal{U}$ (시각 $t$의 optimal). \checkmark
+      \item $i = N - 1$: $\tilde u_{N-1} = K x_N^*$. Terminal set 정의 $K\mathcal{X}_f \subseteq \mathcal{U}$ + $x_N^* \in \mathcal{X}_f$ $\Rightarrow$ $K x_N^* \in \mathcal{U}$. \checkmark
+    \end{itemize}
+
+  \item \textbf{상태 제약 $\tilde x_i \in \mathcal{X}$}:
+    \begin{itemize}
+      \item $i = 0, \ldots, N - 1$: $\tilde x_i = x_{i+1}^* \in \mathcal{X}$ \checkmark.
+      \item $i = N$: $\tilde x_N = A_K x_N^* \in \mathcal{X}_f \subseteq \mathcal{X}$ (아래 (3) 사용). \checkmark
+    \end{itemize}
+
+  \item \textbf{Terminal $\tilde x_N \in \mathcal{X}_f$}: Terminal set \textbf{invariance} $A_K \mathcal{X}_f \subseteq \mathcal{X}_f$로부터 $A_K x_N^* \in \mathcal{X}_f$. \checkmark
+\end{enumerate}
+
+따라서 $\tilde{\mathbf{u}}$는 시각 $t+1$에서 feasible. MPC는 이보다 같거나 더 좋은 optimal을 찾을 수 있으므로 \textbf{feasibility는 보존}된다. \hfill$\square$
+
+핵심: terminal set의 \textbf{invariance under $K$}가 결정적.
+\end{sol}
+
+\subsection*{[보조] Condensed vs Sparse QP \hfill ★}
+
+\begin{prob}
+\textbf{(a)} Condensed (변수 $U$), sparse (변수 $Z$) 두 형식의 변수 수를 $N, n, m$로 표현하라.
+
+\textbf{(b)} Horizon이 길어질수록 어느 쪽이 유리한가? 이유를 한 단락으로.
+\end{prob}
+
+\begin{sol}
+\textbf{(a)}
+\begin{itemize}
+  \item Condensed: $|U| = Nm$.
+  \item Sparse: $|Z| = (N+1)n + Nm$.
+\end{itemize}
+
+\textbf{(b)} Condensed는 $X = \Phi x_t + \Gamma U$ 형태로 다이내믹스를 소거. $\Gamma$가 \textbf{lower triangular block matrix로 dense} ($\Gamma_{ij} = A^{i-j-1}B$). Hessian $H = \Gamma^T \bar Q \Gamma + \bar R$ 역시 dense. $N$ 증가 시 $O((Nm)^2)$ 연산 비싸짐.
+
+Sparse는 변수는 많지만 equality constraint matrix $A_{eq}$가 \textbf{block-banded} (인접 시점만 연결). KKT system도 banded $\Rightarrow$ \textbf{$O(N)$ factorization} 가능 (Riccati-like 구조). Long horizon에서는 sparse가 효율적.
+\end{sol}
+
+%---------- L12 ----------
+\section{L12. NMPC \& PMP}
+
+\subsection*{[메인] Costate recursion 유도 \hfill ★★★★}
+
+\begin{prob}
+강의안 표준 식 $\lambda_k = \ell_x + F_x^T\lambda_{k+1}$이 직접 나오도록 multiplier 인덱스를 $\lambda_{k+1}$로, 부호는 $F - x$ 방향으로 정한 Lagrangian:
+\[
+\mathcal{L} = \sum_{k=0}^{N-1}\ell(x_k, u_k) + \ell_f(x_N) + \sum_{k=0}^{N-1}\lambda_{k+1}^T\bigl(F(x_k, u_k) - x_{k+1}\bigr).
+\]
+
+$\partial\mathcal{L}/\partial x_N = 0$과 $\partial\mathcal{L}/\partial x_k = 0$ ($0 < k < N$)로부터 다음을 유도하라:
+\[
+\lambda_N = \ell_{f,x}(x_N),\qquad \lambda_k = \ell_x(x_k, u_k) + F_x(x_k, u_k)^T \lambda_{k+1}.
+\]
+\end{prob}
+
+\begin{sol}
+\textbf{Terminal} ($k = N$). $x_N$이 등장하는 항: $\ell_f(x_N)$과 $\sum$의 $k = N-1$항에서 $-\lambda_N^T x_N$.
+\[
+\frac{\partial \mathcal{L}}{\partial x_N} = \ell_{f,x}(x_N) - \lambda_N = 0 \quad\Rightarrow\quad \boxed{\lambda_N = \ell_{f,x}(x_N).}
+\]
+
+\textbf{Internal} ($0 < k < N$). $x_k$가 등장하는 항:
+\begin{itemize}
+\item $\ell(x_k, u_k)$ $\to$ $\ell_x$
+\item $\lambda_{k+1}^T F(x_k, u_k)$ ($\sum$의 $k$항) $\to$ $F_x^T\lambda_{k+1}$
+\item $-\lambda_k^T x_k$ ($\sum$의 $k-1$항: $-x_{(k-1)+1} = -x_k$) $\to$ $-\lambda_k$
+\end{itemize}
+
+\[
+\frac{\partial \mathcal{L}}{\partial x_k} = \ell_x + F_x^T\lambda_{k+1} - \lambda_k = 0 \quad\Rightarrow\quad \boxed{\lambda_k = \ell_x(x_k, u_k) + F_x(x_k, u_k)^T \lambda_{k+1}.}
+\]
+
+\textbf{해석}: $\lambda_k$는 시각 $k$의 상태가 \textbf{미래 cost에 미치는 sensitivity} (costate). 역방향으로 $F_x^T$로 propagate하면서 즉각 cost gradient $\ell_x$를 누적. PMP의 이산판.
+\end{sol}
+
+\subsection*{[보조] PMP를 LQR에 적용 \hfill ★★}
+
+\begin{prob}
+연속시간 LQR: $\ell(x, u) = x^T Q x + u^T R u$, $f(x, u) = A x + B u$, $R \succ 0$. Hamiltonian을 쓰고, $\partial H/\partial u = 0$으로부터 최적 입력을 $\lambda$로 표현하라.
+\end{prob}
+
+\begin{sol}
+Hamiltonian:
+\[
+H(x, u, \lambda) = \ell + \lambda^T f = x^T Q x + u^T R u + \lambda^T(Ax + Bu).
+\]
+
+$u$ stationary:
+\[
+\frac{\partial H}{\partial u} = 2 R u + B^T \lambda = 0.
+\]
+
+$R \succ 0$:
+\[
+\boxed{u^*(t) = -\frac{1}{2} R^{-1} B^T \lambda(t).}
+\]
+
+(이산판: $\lambda \to \lambda_{k+1}$.)
+
+이 식과 costate $\dot\lambda = -\partial_x H = -2Qx - A^T\lambda$를 합치면 Hamiltonian system. Riccati ansatz $\lambda = 2 P x$ 대입 시 $P$가 \textbf{continuous-time ARE}를 만족:
+\[
+A^T P + P A - P B R^{-1} B^T P + Q = 0.
+\]
+
+$\Rightarrow$ LQR optimal gain $K_{\text{LQR}} = R^{-1} B^T P$. PMP와 Riccati 일치.
+\end{sol}
+
+%=========================================================
+\section*{정리 + 출제 가능성 티어 (5단계)}
+\addcontentsline{toc}{section}{정리 + 출제 가능성 티어 (5단계)}
+
+\begin{center}
+\begin{tabular}{cl c}
+\toprule
+티어 & 의미 & 문제 수 \\
+\midrule
+★★★★★ & 거의 확정적 출제 & 2 \\
+★★★★  & 매우 높음        & 5 \\
+★★★   & 높음              & 6 \\
+★★    & 중간              & 7 \\
+★     & 낮음              & 8 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+총 \textbf{28문제} (L05, L06에 보조2 추가).
+
+\begin{center}
+\scriptsize
+\begin{tabular}{cl c l c}
+\toprule
+L & 메인 & 티어 & 보조 & 티어 \\
+\midrule
+00 & Visibility/Voronoi 비교            & ★★★    & Local minima + nav func     & ★★  \\
+01 & A* trace                            & ★★★    & Admissible $\neq$ cons.     & ★★  \\
+02 & RRT 의사코드                        & ★       & RRT* rewire                 & ★★★ \\
+03 & LPA* update                         & ★       & $k_m$ 역할                   & ★   \\
+04 & Pfaffian + Lie bracket              & ★★★★★ & 차량 변종 비교               & ★   \\
+05 & Unicycle chained form               & ★★★★  & Chow--Rashevskii / \textbf{자동차 chained}        & ★★ / \textbf{★★★★} \\
+06 & Min-jerk 차수 유도                   & ★★★★  & Bézier $C^2$ / \textbf{Min-snap 차수} & ★★★ / \textbf{★★★} \\
+07 & SAT 두 사각형                        & ★★      & GJK trace                   & ★   \\
+08 & $(I-\hat x'\hat x'^T)$ 의미          & ★★      & $K_2$ matrix                & ★   \\
+09 & Quadrotor $f, \mathbf{b}_3$         & ★★★    & Ellipsoid tangent           & ★   \\
+10 & Riccati 한 step                     & ★★★★  & iLQR $k, K, \alpha$         & ★★  \\
+11 & Recursive feasibility               & ★★★★★ & Condensed vs Sparse         & ★   \\
+12 & Costate recursion 유도              & ★★★★  & PMP on LQR                  & ★★  \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{등급별 정리}
+
+\textbf{★★★★★ 거의 확정적 출제 (2)}
+\begin{enumerate}
+  \item \textbf{L11 메인} Recursive feasibility --- MPC 안정성 핵심, 강의안에 자세히.
+  \item \textbf{L04 메인} Pfaffian + Lie bracket --- nonholonomic 핵심, HW 직결.
+\end{enumerate}
+
+\textbf{★★★★ 매우 높음 (5)}
+\begin{enumerate}\setcounter{enumi}{2}
+  \item \textbf{L05 메인} Unicycle chained form --- HW2 직결 패턴.
+  \item \textbf{L05 보조2} 자동차 chained form (Lie bracket 4×4) --- HW2 1(a)--(c) 직결.
+  \item \textbf{L10 메인} Riccati 한 step --- 손계산 표준 문제.
+  \item \textbf{L06 메인} Min-jerk 차수 유도 --- Euler--Lagrange 클래식.
+  \item \textbf{L12 메인} Costate recursion 유도 --- NMPC 핵심.
+\end{enumerate}
+
+\textbf{★★★ 높음 (6)}
+\begin{enumerate}\setcounter{enumi}{7}
+  \item \textbf{L01 메인} A* trace --- 손계산 클래식.
+  \item \textbf{L09 메인} Quadrotor $f, \mathbf{b}_3$ --- flatness 손계산.
+  \item \textbf{L00 메인} Visibility / Voronoi 비교 --- 개념 비교 단골.
+  \item \textbf{L06 보조} Bézier $C^2$ --- 트라젝토리 핵심.
+  \item \textbf{L06 보조2} Min-snap 차수 유도 --- min-jerk와의 일반화.
+  \item \textbf{L02 보조} RRT* rewire + asymp.\ optimal --- 식 + 직관.
+\end{enumerate}
+
+\textbf{★★ 중간 (7)}
+\begin{enumerate}\setcounter{enumi}{13}
+  \item \textbf{L05 보조} Chow--Rashevskii --- Lie algebra 짧은 적용.
+  \item \textbf{L00 보조} Local minima + nav func 4조건.
+  \item \textbf{L01 보조} Admissible $\neq$ consistent --- 미묘한 차이.
+  \item \textbf{L08 메인} $(I-\hat x'\hat x'^T)$ projection 의미 --- CHOMP 핵심.
+  \item \textbf{L10 보조} iLQR $k, K, \alpha$ --- 개념 설명.
+  \item \textbf{L12 보조} PMP on LQR --- 짧은 유도.
+  \item \textbf{L07 메인} SAT 두 사각형 --- 손계산.
+\end{enumerate}
+
+\textbf{★ 낮음 (8)}
+\begin{enumerate}\setcounter{enumi}{20}
+  \item \textbf{L02 메인} RRT 의사코드 --- 단순 알고리즘 채우기.
+  \item \textbf{L03 메인} LPA* update --- 약간 복잡.
+  \item \textbf{L03 보조} $k_m$ 역할 --- 개념 설명.
+  \item \textbf{L07 보조} GJK trace --- 약간 복잡.
+  \item \textbf{L04 보조} 자동차 변종 --- 표 정리.
+  \item \textbf{L08 보조} $K_2$ 행렬 --- 단순 작성.
+  \item \textbf{L09 보조} ellipsoid tangent --- 유도.
+  \item \textbf{L11 보조} condensed vs sparse --- 비교.
+\end{enumerate}
+
+\subsection*{출제 패턴 추정}
+
+\begin{itemize}
+  \item \textbf{계산 문제 2--3개}: L01 A* trace / L10 Riccati / L04 Lie bracket / L09 Quadrotor 중.
+  \item \textbf{유도 문제 1--2개}: L06 min-jerk 차수 / L05 chained form / L12 costate recursion 중.
+  \item \textbf{증명/논리 1개}: L11 recursive feasibility는 거의 확정.
+  \item \textbf{개념 비교 1개}: L00 visibility vs Voronoi / L02 RRT vs RRT* 등.
+  \item \textbf{개념 서술 1개}: L08 CHOMP projection / L09 flatness 의미 등.
+\end{itemize}
+
+총 \textbf{28문제}. 풀이는 cheat sheet 없이도 따라갈 수 있도록 단계별. 손계산 가능한 수치만 사용.
+
+\end{document}
