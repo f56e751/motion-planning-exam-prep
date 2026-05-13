@@ -1,6 +1,8 @@
 # Motion Planning 기말 예상 문제집
 
-각 강의안(L00–L12)별 출제 가능성 높은 문제 2개 (메인 + 보조), 총 26문제. 풀이는 문제 바로 아래.
+각 강의안(L00–L11)별 출제 가능성 높은 문제 (메인 + 보조 ± 보조2), 총 **26문제**. 풀이는 문제 바로 아래.
+
+**L12 NMPC/PMP는 출제 제외** (강의 공지 반영).
 
 조건: cheat sheet 지참 가능, 계산기 사용 불가.
 
@@ -584,83 +586,7 @@ Sparse는 변수는 많지만 equality constraint matrix $A_{eq}$가 **block-ban
 
 ---
 
-## L12. NMPC & PMP
-
-### [메인] Costate recursion 유도 ★★★★
-
-강의안 표준 식 $\lambda_k = \ell_x + F_x^T\lambda_{k+1}$이 직접 나오도록 multiplier 인덱스를 $\lambda_{k+1}$로, 부호는 $F - x$ 방향으로 정한 Lagrangian:
-$$\mathcal{L} = \sum_{k=0}^{N-1}\ell(x_k, u_k) + \ell_f(x_N) + \sum_{k=0}^{N-1}\lambda_{k+1}^T\bigl(F(x_k, u_k) - x_{k+1}\bigr).$$
-
-$\partial\mathcal{L}/\partial x_N = 0$과 $\partial\mathcal{L}/\partial x_k = 0$ ($0 < k < N$)로부터 다음을 유도하라:
-$$\lambda_N = \ell_{f,x}(x_N),\qquad \lambda_k = \ell_x(x_k, u_k) + F_x(x_k, u_k)^T \lambda_{k+1}.$$
-
-**풀이.**
-
-**Terminal** ($k = N$). $x_N$이 등장하는 항: $\ell_f(x_N)$, 그리고 $\sum$의 $k = N-1$ 항에서 $-\lambda_N^T x_N$.
-$$\frac{\partial \mathcal{L}}{\partial x_N} = \ell_{f,x}(x_N) - \lambda_N = 0 \quad\Rightarrow\quad \boxed{\lambda_N = \ell_{f,x}(x_N).}$$
-
-**Internal** ($0 < k < N$). $x_k$가 등장하는 항:
-- $\ell(x_k, u_k)$ → $\ell_x$
-- $\lambda_{k+1}^T F(x_k, u_k)$ ($\sum$의 $k$항) → $F_x^T \lambda_{k+1}$
-- $-\lambda_k^T x_k$ ($\sum$의 $k-1$항: $-x_{(k-1)+1} = -x_k$) → $-\lambda_k$
-
-합 = 0:
-$$\ell_x + F_x^T \lambda_{k+1} - \lambda_k = 0 \quad\Rightarrow\quad \boxed{\lambda_k = \ell_x(x_k, u_k) + F_x(x_k, u_k)^T \lambda_{k+1}.}$$
-
-**해석**: $\lambda_k$는 시각 $k$의 상태가 **미래 cost에 미치는 sensitivity** (costate). 역방향으로 단계마다 한 step씩 $F_x^T$로 propagate하면서 즉각 cost gradient $\ell_x$를 누적한다. PMP의 이산판.
-
-### [보조2] Discrete costate → Continuous PMP 극한 ★★★★
-
-연속시간 dynamics $\dot x = f(x, u)$를 Euler 이산화하면 $F(x, u) = x + \Delta t\, f(x, u)$, stage cost는 $\Delta t \cdot \ell(x, u)$. 이산 NMPC의 1차 최적성 조건은
-$$\lambda_k = \Delta t\,\ell_x(x_k, u_k) + F_x(x_k, u_k)^T \lambda_{k+1}, \qquad \Delta t\,\ell_u(x_k, u_k) + F_u(x_k, u_k)^T \lambda_{k+1} = 0.$$
-
-$\Delta t \to 0$ 극한을 취해 연속시간 **Pontryagin 최소원리** 식
-$$\dot\lambda = -\frac{\partial H}{\partial x}, \qquad \frac{\partial H}{\partial u} = 0,\quad H(x, u, \lambda) = \ell + \lambda^T f$$
-가 나옴을 보여라.
-
-**풀이.**
-
-**Step 1 — Jacobian 대입**. $F = I \cdot x + \Delta t\, f$이므로
-$$F_x = I + \Delta t\, f_x, \qquad F_u = \Delta t\, f_u.$$
-
-**Step 2 — Costate 식 정리**. 대입하면
-$$\lambda_k = \Delta t\,\ell_x + (I + \Delta t\, f_x)^T \lambda_{k+1} = \lambda_{k+1} + \Delta t\bigl(\ell_x + f_x^T \lambda_{k+1}\bigr).$$
-양변에서 $\lambda_{k+1}$를 빼고 $\Delta t$로 나누면
-$$\frac{\lambda_k - \lambda_{k+1}}{\Delta t} = \ell_x + f_x^T \lambda_{k+1}.$$
-
-**Step 3 — Limit $\Delta t \to 0$**. $k\,\Delta t \to t$로 두고 $\lambda_k \to \lambda(t)$, $\lambda_{k+1} \to \lambda(t)$. 좌변의 backward difference는 $-\dot\lambda(t)$:
-$$-\dot\lambda = \ell_x + f_x^T \lambda.$$
-$H = \ell + \lambda^T f$로 두면 $\partial_x H = \ell_x + f_x^T \lambda$이므로
-$$\boxed{\dot\lambda(t) = -\frac{\partial H}{\partial x}.}$$
-
-**Step 4 — Control optimality**. $\Delta t\,\ell_u + (\Delta t\, f_u)^T \lambda_{k+1} = 0$ 양변을 $\Delta t$로 나누면
-$$\ell_u + f_u^T \lambda = 0 \quad\Leftrightarrow\quad \boxed{\frac{\partial H}{\partial u} = 0.}$$
-
-**해석**: 이산 NMPC의 FONC가 곧 PMP의 이산화임. costate $\lambda$는 시각 $t$의 상태가 미래 cost에 미치는 sensitivity이고, Hamiltonian의 $x$-편미분에 음의 부호로 역방향 전파. DDP의 backward pass는 이 PMP 식의 직접적인 이산 구현이다.
-
-### [보조] PMP를 LQR에 적용 ★★
-
-연속시간 LQR: $\ell(x, u) = x^T Q x + u^T R u$, $f(x, u) = Ax + Bu$, $R \succ 0$.
-
-Hamiltonian을 쓰고, $\partial H / \partial u = 0$으로부터 최적 입력을 $\lambda$로 표현하라.
-
-**풀이.**
-
-Hamiltonian:
-$$H(x, u, \lambda) = \ell + \lambda^T f = x^T Q x + u^T R u + \lambda^T(Ax + Bu).$$
-
-$u$에 대한 stationary:
-$$\frac{\partial H}{\partial u} = 2 R u + B^T \lambda = 0.$$
-
-$R \succ 0$이므로:
-$$\boxed{u^*(t) = -\frac{1}{2} R^{-1} B^T \lambda(t).}$$
-
-(이산판에서는 $\lambda \to \lambda_{k+1}$로 대체.)
-
-이 식과 costate dynamics $\dot\lambda = -\partial_x H = -2Qx - A^T\lambda$를 합치면 두 ODE가 결합되어 Hamiltonian system을 이룬다. Riccati ansatz $\lambda = 2 P x$를 대입하면 $P$가 만족하는 식이 정확히 **continuous-time ARE**:
-$$A^T P + P A - P B R^{-1} B^T P + Q = 0.$$
-
-→ LQR optimal gain $K_{\text{LQR}} = R^{-1} B^T P$. PMP가 Riccati와 일치.
+_L12 (NMPC & PMP)는 출제 범위에서 제외._
 
 ---
 
@@ -669,12 +595,12 @@ $$A^T P + P A - P B R^{-1} B^T P + Q = 0.$$
 | 티어 | 의미 | 문제 수 |
 |:-:|---|:-:|
 | ★★★★★ | 거의 확정적 출제 | 2 |
-| ★★★★ | 매우 높음 | 6 |
+| ★★★★ | 매우 높음 | 4 |
 | ★★★ | 높음 | 6 |
-| ★★ | 중간 | 7 |
+| ★★ | 중간 | 6 |
 | ★ | 낮음 | 8 |
 
-총 **29문제** (L05, L06, L12에 보조2 추가).
+총 **26문제** (L12 NMPC/PMP는 출제 제외 — 강의 공지 반영).
 
 | L | 메인 | 티어 | 보조 | 티어 |
 |---|---|:-:|---|:-:|
@@ -690,7 +616,7 @@ $$A^T P + P A - P B R^{-1} B^T P + Q = 0.$$
 | 09 | Quadrotor $f, \mathbf{b}_3$ | ★★★ | Ellipsoid tangent | ★ |
 | 10 | Riccati 한 step | ★★★★ | iLQR $k, K, \alpha$ | ★★ |
 | 11 | Recursive feasibility | ★★★★★ | Condensed vs Sparse | ★ |
-| 12 | Costate recursion 유도 | ★★★★ | PMP on LQR / **Discrete→Cont PMP 극한** | ★★ / **★★★★** |
+| 12 | ~~NMPC & PMP~~ (출제 제외) | — | — | — |
 
 ## 등급별 정리
 
@@ -698,47 +624,44 @@ $$A^T P + P A - P B R^{-1} B^T P + Q = 0.$$
 1. **L11 메인** Recursive feasibility — MPC 안정성 핵심, 강의안에 자세히 다룸.
 2. **L04 메인** Pfaffian + Lie bracket — nonholonomic 핵심, HW에서도 다룸.
 
-### ★★★★ 매우 높음 (6)
+### ★★★★ 매우 높음 (4)
 3. **L05 메인** Unicycle chained form — HW2 직결 패턴.
 4. **L05 보조2** 자동차 chained form (Lie bracket 4×4) — HW2 1(a)-(c) 직결.
 5. **L10 메인** Riccati 한 step — 손계산 표준 문제.
 6. **L06 메인** Min-jerk 차수 유도 — Euler–Lagrange 클래식.
-7. **L12 메인** Costate recursion 유도 — NMPC 핵심.
-8. **L12 보조2** Discrete → Continuous PMP 극한 — NMPC ↔ PMP 본질 연결.
 
 ### ★★★ 높음 (6)
-9. **L01 메인** A* trace — 손계산 클래식.
-10. **L09 메인** Quadrotor $f, \mathbf{b}_3$ — flatness 손계산.
-11. **L00 메인** Visibility / Voronoi 비교 — 개념 비교 단골.
-12. **L06 보조** Bézier $C^2$ — 트라젝토리 핵심.
-13. **L06 보조2** Min-snap 차수 유도 — min-jerk와의 일반화.
-14. **L02 보조** RRT* rewire + asymp.\ optimal — 식 + 직관.
+7. **L01 메인** A* trace — 손계산 클래식.
+8. **L09 메인** Quadrotor $f, \mathbf{b}_3$ — flatness 손계산.
+9. **L00 메인** Visibility / Voronoi 비교 — 개념 비교 단골.
+10. **L06 보조** Bézier $C^2$ — 트라젝토리 핵심.
+11. **L06 보조2** Min-snap 차수 유도 — min-jerk와의 일반화.
+12. **L02 보조** RRT* rewire + asymp.\ optimal — 식 + 직관.
 
-### ★★ 중간 (7)
-15. **L05 보조** Chow–Rashevskii — Lie algebra 짧은 적용.
-16. **L00 보조** Local minima + nav func 4조건.
-17. **L01 보조** Admissible ≠ consistent — 미묘한 차이.
-18. **L08 메인** $(I-\hat x'\hat x'^T)$ projection 의미 — CHOMP 핵심.
-19. **L10 보조** iLQR $k, K, \alpha$ — 개념 설명.
-20. **L12 보조** PMP on LQR — 짧은 유도.
-21. **L07 메인** SAT 두 사각형 — 손계산.
+### ★★ 중간 (6)
+13. **L05 보조** Chow–Rashevskii — Lie algebra 짧은 적용.
+14. **L00 보조** Local minima + nav func 4조건.
+15. **L01 보조** Admissible ≠ consistent — 미묘한 차이.
+16. **L08 메인** $(I-\hat x'\hat x'^T)$ projection 의미 — CHOMP 핵심.
+17. **L10 보조** iLQR $k, K, \alpha$ — 개념 설명.
+18. **L07 메인** SAT 두 사각형 — 손계산.
 
 ### ★ 낮음 (8)
-22. **L02 메인** RRT 의사코드 — 단순 알고리즘 채우기.
-23. **L03 메인** LPA* update — 약간 복잡.
-24. **L03 보조** $k_m$ 역할 — 개념 설명.
-25. **L07 보조** GJK trace — 약간 복잡.
-26. **L04 보조** 자동차 변종 — 표 정리.
-27. **L08 보조** $K_2$ 행렬 — 단순 작성.
-28. **L09 보조** ellipsoid tangent — 유도.
-29. **L11 보조** condensed vs sparse — 비교.
+19. **L02 메인** RRT 의사코드 — 단순 알고리즘 채우기.
+20. **L03 메인** LPA* update — 약간 복잡.
+21. **L03 보조** $k_m$ 역할 — 개념 설명.
+22. **L07 보조** GJK trace — 약간 복잡.
+23. **L04 보조** 자동차 변종 — 표 정리.
+24. **L08 보조** $K_2$ 행렬 — 단순 작성.
+25. **L09 보조** ellipsoid tangent — 유도.
+26. **L11 보조** condensed vs sparse — 비교.
 
 ## 출제 패턴 추정
 
 - **계산 문제 2–3개**: L01 A* trace / L10 Riccati / L04 Lie bracket / L09 Quadrotor 중.
-- **유도 문제 1–2개**: L06 min-jerk 차수 / L05 chained form / L12 costate or PMP 극한 중.
+- **유도 문제 1–2개**: L06 min-jerk 차수 / L05 chained form 중.
 - **증명/논리 1개**: L11 recursive feasibility는 거의 확정.
 - **개념 비교 1개**: L00 visibility vs Voronoi / L02 RRT vs RRT* 등.
 - **개념 서술 1개**: L08 CHOMP projection / L09 flatness 의미 등.
 
-총 **29문제**. 풀이는 cheat sheet 없이도 따라갈 수 있도록 단계별로 작성. 손계산 가능한 수치만 사용.
+총 **26문제**. L12 NMPC/PMP는 출제 제외. 풀이는 cheat sheet 없이도 따라갈 수 있도록 단계별. 손계산 가능한 수치만 사용.
